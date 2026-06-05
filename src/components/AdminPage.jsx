@@ -238,29 +238,27 @@ function AdminPage() {
     return adjustedRevenue * 100 * 0.67 * (sharePercent / 100) + contentAdjust + attendanceAdjust;
   };
 
-  const totalSalarySummary = useMemo(() => {
-    return salaryMembers.map((member) => {
-      let totalScore = 0;
-      let totalContent = 0;
-      let totalAttendance = 0;
-      let totalSalary = 0;
+  const totalSalarySummary = salaryMembers.map((member) => {
+  let totalScore = 0;
+  let totalContent = 0;
+  let totalAttendance = 0;
+  let totalSalary = 0;
 
-      salaryRounds.forEach((round) => {
-        totalScore += getRoundMemberScore(round, member);
-        totalContent += getPenaltyValue(round, member, 'content');
-        totalAttendance += getPenaltyValue(round, member, 'attendance');
-        totalSalary += getSalary(round, member);
-      });
+  salaryRounds.forEach((round) => {
+    totalScore += getRoundMemberScore(round, member);
+    totalContent += getPenaltyValue(round, member, 'content');
+    totalAttendance += getPenaltyValue(round, member, 'attendance');
+    totalSalary += getSalary(round, member);
+  });
 
-      return {
-        member,
-        totalScore,
-        totalContent,
-        totalAttendance,
-        totalSalary,
-      };
-    });
-  }, [scoreData, penalties, shares, roundRevenues]);
+  return {
+    member,
+    totalScore,
+    totalContent,
+    totalAttendance,
+    totalSalary,
+  };
+});
 
   return (
     <main className="admin-page">
