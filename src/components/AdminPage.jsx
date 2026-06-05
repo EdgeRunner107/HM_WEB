@@ -83,7 +83,7 @@ function AdminPage() {
     try {
       setSettingStatus('불러오는 중...');
 
-      const response = await fetch(`${API_BASE}/salary-settings`);
+      const response = await fetch(`https://hm-web-back.onrender.com/salary-settings`);
 
       if (!response.ok) {
         throw new Error(`${response.status} ${response.statusText}`);
@@ -107,7 +107,7 @@ function AdminPage() {
     try {
       setSettingStatus('저장 중...');
 
-      const response = await fetch(`${API_BASE}/salary-settings`, {
+      const response = await fetch(`https://hm-web-back.onrender.com/salary-settings`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
