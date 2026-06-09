@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 
 const API_BASE = 'https://asg-b2.onrender.com';
 const SETTING_API = 'https://hm-web-back.onrender.com/salary-settings';
@@ -66,9 +66,12 @@ function AdminPage() {
   const fetchScoreData = async () => {
     try {
       setLoadingScores(true);
+
       const response = await fetch(`${API_BASE}/d`);
 
-      if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+      if (!response.ok) {
+        throw new Error(`${response.status} ${response.statusText}`);
+      }
 
       const data = await response.json();
       setScoreData(Array.isArray(data) ? data : []);
@@ -86,7 +89,9 @@ function AdminPage() {
 
       const response = await fetch(SETTING_API);
 
-      if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+      if (!response.ok) {
+        throw new Error(`${response.status} ${response.statusText}`);
+      }
 
       const data = await response.json();
 
@@ -122,7 +127,9 @@ function AdminPage() {
         }),
       });
 
-      if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+      if (!response.ok) {
+        throw new Error(`${response.status} ${response.statusText}`);
+      }
 
       setSettingStatus('저장 완료');
       alert('급여 설정 저장 완료');
@@ -253,7 +260,7 @@ function AdminPage() {
     return adjustedRevenue * 100 * 0.67 * (sharePercent / 100) + contentAdjust + attendanceAdjust;
   };
 
-  const scoreSummary = useMemo(() => {
+  const scoreSummary = (() => {
     const result = {};
 
     scoreData.forEach((row) => {
@@ -306,7 +313,7 @@ function AdminPage() {
     });
 
     return Object.values(result).sort((a, b) => b.total - a.total);
-  }, [scoreData, specialContributions]);
+  })();
 
   const totalSalarySummary = salaryMembers.map((member) => {
     let totalScore = 0;
@@ -522,7 +529,6 @@ function AdminPage() {
                   <tbody>
                     {salaryMembers.map((member) => {
                       const baseScore = getBaseRoundMemberScore(round, member);
-                      const specialContribution = getSpecialContribution(round, member);
                       const finalScore = getRoundMemberScore(round, member);
                       const salary = getSalary(round, member);
                       const memberShare = getMemberShare(round, member);
