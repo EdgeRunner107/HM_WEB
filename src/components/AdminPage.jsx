@@ -398,7 +398,7 @@ function AdminPage() {
     const jobBattleSalary = getWaiterJobBattleSalary(memberName);
     const attendanceAdjust = getWaiterAttendanceAdjust(memberName);
 
-    return roundSalary + jobBattleSalary - attendanceAdjust;
+    return roundSalary + jobBattleSalary + attendanceAdjust;
   };
 
   const scoreSummary = (() => {
