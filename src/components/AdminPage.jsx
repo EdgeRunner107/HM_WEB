@@ -283,7 +283,7 @@ function AdminPage() {
     const contentAdjust = getPenaltyValue(round, member, 'content');
     const attendanceAdjust = getPenaltyValue(round, member, 'attendance');
 
-    return adjustedRevenue * 100 * 0.67 * (sharePercent / 100) + contentAdjust + attendanceAdjust;
+    return adjustedRevenue * 100 * 0.63 * (sharePercent / 100) + contentAdjust + attendanceAdjust;
   };
 
   const jobBattleRounds = Array.from(
