@@ -260,6 +260,23 @@ function AdminPage() {
     return getBaseRoundMemberScore(roundName, memberName) + getSpecialContribution(roundName, memberName);
   };
 
+  const getExcludedTimeScore = (memberName) => {
+    return scoreData.reduce((sum, row) => {
+      const dateText = row[0];
+      const name = row[4];
+      const round = row[8];
+      const score = Number(row[7]) || 0;
+
+      if (!name) return sum;
+      if (name !== memberName) return sum;
+      if (isJobBattleRound(round)) return sum;
+      if (!salaryRounds.includes(round)) return sum;
+      if (!shouldExcludeScore(name, dateText)) return sum;
+
+      return sum + score;
+    }, 0);
+  };
+
   const getExcludedRoundScore = (roundName) => {
     return scoreData.reduce((sum, row) => {
       const dateText = row[0];
@@ -456,15 +473,17 @@ function AdminPage() {
         return sum + getRoundMemberScore(round, member);
       }, 0);
 
+      const excludedTimeScore = getExcludedTimeScore(member);
       const contributionPay = totalScore * (Number(totalContributionRate) || 0);
 
       return {
         member,
         totalScore,
+        excludedTimeScore,
         contributionPay,
       };
     })
-    .filter((item) => item.totalScore > 0)
+    .filter((item) => item.totalScore > 0 || item.excludedTimeScore > 0)
     .sort((a, b) => b.totalScore - a.totalScore);
 
   const jobBattleSummary = salaryMembers.map((member) => {
@@ -779,7 +798,8 @@ function AdminPage() {
               <tr>
                 <th>순위</th>
                 <th>멤버</th>
-                <th>직급전 제외 총점수</th>
+                <th>직급전 제외 반영 총점수</th>
+                <th>2시 이후 생략 점수</th>
                 <th>계산식</th>
                 <th>기여도 금액</th>
               </tr>
@@ -791,6 +811,7 @@ function AdminPage() {
                   <td>{index + 1}</td>
                   <td>{item.member}</td>
                   <td>{item.totalScore.toLocaleString()}</td>
+                  <td>{item.excludedTimeScore.toLocaleString()}</td>
                   <td>
                     {item.totalScore.toLocaleString()} × {Number(totalContributionRate) || 0}
                   </td>
@@ -800,7 +821,7 @@ function AdminPage() {
 
               {!totalContributionSummary.length && (
                 <tr>
-                  <td colSpan="5">점수 데이터를 불러오면 여기에 표시됩니다.</td>
+                  <td colSpan="6">점수 데이터를 불러오면 여기에 표시됩니다.</td>
                 </tr>
               )}
             </tbody>
