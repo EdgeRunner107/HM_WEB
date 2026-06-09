@@ -42,6 +42,15 @@ const waiterMembers = ['문어', '재명'];
 const salaryRounds = Array.from({ length: 7 }, (_, i) => `엑셀부${i + 1}회차`);
 const excludedSalaryMembers = ['문어', '재명', '이재명'];
 
+const DEFAULT_WAITER_RATES = {
+  문어: {
+    jobBattle: '0.55',
+  },
+  재명: {
+    jobBattle: '0.55',
+  },
+};
+
 function AdminPage() {
   const [scoreData, setScoreData] = useState([]);
   const [loadingScores, setLoadingScores] = useState(false);
@@ -54,11 +63,7 @@ function AdminPage() {
 
   const [jobBattleRate, setJobBattleRate] = useState('0.55');
   const [totalContributionRate, setTotalContributionRate] = useState('0.7');
-
-  const [waiterRates, setWaiterRates] = useState({
-    문어: '0.55',
-    재명: '0.55',
-  });
+  const [waiterRates, setWaiterRates] = useState(DEFAULT_WAITER_RATES);
 
   const [settingStatus, setSettingStatus] = useState('');
 
@@ -81,10 +86,7 @@ function AdminPage() {
   };
 
   const shouldExcludeScore = (memberName, dateText) => {
-    if (waiterMembers.includes(memberName)) {
-      return false;
-    }
-
+    if (waiterMembers.includes(memberName)) return false;
     return isExcludedTimeForNormalRound(dateText);
   };
 
@@ -98,9 +100,7 @@ function AdminPage() {
 
       const response = await fetch(`${API_BASE}/d`);
 
-      if (!response.ok) {
-        throw new Error(`${response.status} ${response.statusText}`);
-      }
+      if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
 
       const data = await response.json();
       setScoreData(Array.isArray(data) ? data : []);
@@ -112,15 +112,32 @@ function AdminPage() {
     }
   };
 
+  const normalizeWaiterRates = (data) => {
+    const next = data || DEFAULT_WAITER_RATES;
+
+    return waiterMembers.reduce((acc, member) => {
+      if (typeof next?.[member] === 'string' || typeof next?.[member] === 'number') {
+        acc[member] = {
+          jobBattle: String(next[member]),
+        };
+      } else {
+        acc[member] = {
+          ...(DEFAULT_WAITER_RATES[member] || {}),
+          ...(next?.[member] || {}),
+        };
+      }
+
+      return acc;
+    }, {});
+  };
+
   const loadSalarySettings = async () => {
     try {
       setSettingStatus('불러오는 중...');
 
       const response = await fetch(SETTING_API);
 
-      if (!response.ok) {
-        throw new Error(`${response.status} ${response.statusText}`);
-      }
+      if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
 
       const data = await response.json();
 
@@ -131,7 +148,7 @@ function AdminPage() {
       setSpecialRoundShares(data.special_round_shares || {});
       setJobBattleRate(data.job_battle_rate || '0.55');
       setTotalContributionRate(data.total_contribution_rate || '0.7');
-      setWaiterRates(data.waiter_rates || { 문어: '0.55', 재명: '0.55' });
+      setWaiterRates(normalizeWaiterRates(data.waiter_rates));
 
       setSettingStatus('불러오기 완료');
     } catch (error) {
@@ -162,9 +179,7 @@ function AdminPage() {
         }),
       });
 
-      if (!response.ok) {
-        throw new Error(`${response.status} ${response.statusText}`);
-      }
+      if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
 
       setSettingStatus('저장 완료');
       alert('급여 설정 저장 완료');
@@ -325,6 +340,34 @@ function AdminPage() {
     return score * 63 * rate;
   };
 
+  const getWaiterRate = (memberName, key) => {
+    return Number(waiterRates?.[memberName]?.[key]) || 0;
+  };
+
+  const updateWaiterRate = (memberName, key, value) => {
+    setWaiterRates((prev) => ({
+      ...prev,
+      [memberName]: {
+        ...(prev[memberName] || {}),
+        [key]: value,
+      },
+    }));
+  };
+
+  const getWaiterRoundSalary = (memberName, round) => {
+    const score = getRoundMemberScore(round, memberName);
+    const rate = getWaiterRate(memberName, round);
+
+    return score * 63 * rate;
+  };
+
+  const getWaiterJobBattleSalary = (memberName) => {
+    const score = getJobBattleMemberScore(memberName);
+    const rate = getWaiterRate(memberName, 'jobBattle');
+
+    return score * 63 * rate;
+  };
+
   const getWaiterNormalScore = (memberName) => {
     return salaryRounds.reduce((sum, round) => {
       return sum + getRoundMemberScore(round, memberName);
@@ -335,29 +378,24 @@ function AdminPage() {
     return getWaiterNormalScore(memberName) + getJobBattleMemberScore(memberName);
   };
 
-  const getWaiterRate = (memberName) => {
-    return Number(waiterRates?.[memberName]) || 0;
-  };
-
-  const updateWaiterRate = (memberName, value) => {
-    setWaiterRates((prev) => ({
-      ...prev,
-      [memberName]: value,
-    }));
-  };
-
   const getWaiterAttendanceAdjust = (memberName) => {
     return salaryRounds.reduce((sum, round) => {
       return sum + getPenaltyValue(round, memberName, 'attendance');
     }, 0);
   };
 
+  const getWaiterRoundSalaryTotal = (memberName) => {
+    return salaryRounds.reduce((sum, round) => {
+      return sum + getWaiterRoundSalary(memberName, round);
+    }, 0);
+  };
+
   const getWaiterSalary = (memberName) => {
-    const totalScore = getWaiterTotalScore(memberName);
-    const rate = getWaiterRate(memberName);
+    const roundSalary = getWaiterRoundSalaryTotal(memberName);
+    const jobBattleSalary = getWaiterJobBattleSalary(memberName);
     const attendanceAdjust = getWaiterAttendanceAdjust(memberName);
 
-    return totalScore * 63 * rate + attendanceAdjust;
+    return roundSalary + jobBattleSalary - attendanceAdjust;
   };
 
   const scoreSummary = (() => {
@@ -441,8 +479,9 @@ function AdminPage() {
     const normalScore = getWaiterNormalScore(member);
     const jobBattleScore = getJobBattleMemberScore(member);
     const totalScore = getWaiterTotalScore(member);
+    const roundSalary = getWaiterRoundSalaryTotal(member);
+    const jobBattleSalary = getWaiterJobBattleSalary(member);
     const attendanceAdjust = getWaiterAttendanceAdjust(member);
-    const rate = getWaiterRate(member);
     const salary = getWaiterSalary(member);
 
     return {
@@ -450,8 +489,9 @@ function AdminPage() {
       normalScore,
       jobBattleScore,
       totalScore,
+      roundSalary,
+      jobBattleSalary,
       attendanceAdjust,
-      rate,
       salary,
     };
   });
@@ -563,7 +603,7 @@ function AdminPage() {
             <h2>급여 계산표</h2>
             <p>일반회차: (회차별 총매출 - 문어/재명 점수) × 100 × 0.63 × 기본 지분%</p>
             <p>직급전: 개인 직급전 점수 × 63 × 직급전 배율</p>
-            <p>웨이터: 일반회차 점수 + 직급전 점수 전체 합산 × 63 × 개인 배율 - 근태금액</p>
+            <p>웨이터: 회차별 점수 × 63 × 회차별 배율 + 직급전 점수 × 63 × 직급전 배율 - 근태금액</p>
             <p>7회차 총합 기여도: 직급전 제외 전체 점수 × 기여도 배율</p>
           </div>
 
@@ -595,11 +635,11 @@ function AdminPage() {
           ))}
         </div>
 
-        <h3>직급전 배율 설정</h3>
+        <h3>직급전 기본 배율 설정</h3>
 
         <div className="share-grid">
           <label className="share-box">
-            <strong>직급전 배율</strong>
+            <strong>일반 멤버 직급전 배율</strong>
             <input
               type="number"
               step="0.01"
@@ -610,21 +650,50 @@ function AdminPage() {
           </label>
         </div>
 
-        <h3>웨이터 개인별 배율 설정</h3>
+        <h3>웨이터 직급전 및 회차별 배율 설정</h3>
 
-        <div className="share-grid">
-          {waiterMembers.map((member) => (
-            <label key={`waiter-rate-${member}`} className="share-box">
-              <strong>{member} 배율</strong>
-              <input
-                type="number"
-                step="0.01"
-                placeholder="예: 0.55"
-                value={waiterRates?.[member] || ''}
-                onChange={(e) => updateWaiterRate(member, e.target.value)}
-              />
-            </label>
-          ))}
+        <div className="salary-table-wrap">
+          <table className="salary-table">
+            <thead>
+              <tr>
+                <th>웨이터</th>
+                {salaryRounds.map((round) => (
+                  <th key={`waiter-rate-head-${round}`}>{round}</th>
+                ))}
+                <th>직급전</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {waiterMembers.map((member) => (
+                <tr key={`waiter-rate-row-${member}`}>
+                  <td>{member}</td>
+
+                  {salaryRounds.map((round) => (
+                    <td key={`waiter-rate-${member}-${round}`}>
+                      <input
+                        type="number"
+                        step="0.01"
+                        placeholder="0.55"
+                        value={waiterRates?.[member]?.[round] || ''}
+                        onChange={(e) => updateWaiterRate(member, round, e.target.value)}
+                      />
+                    </td>
+                  ))}
+
+                  <td>
+                    <input
+                      type="number"
+                      step="0.01"
+                      placeholder="0.55"
+                      value={waiterRates?.[member]?.jobBattle || ''}
+                      onChange={(e) => updateWaiterRate(member, 'jobBattle', e.target.value)}
+                    />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
 
         <h3>7회차 총합 기여도 배율 설정</h3>
@@ -763,9 +832,9 @@ function AdminPage() {
                 <th>일반회차 점수</th>
                 <th>직급전 점수</th>
                 <th>총점수</th>
-                <th>개인 배율</th>
+                <th>회차 급여</th>
+                <th>직급전 급여</th>
                 <th>근태 차감</th>
-                <th>계산식</th>
                 <th>웨이터 급여</th>
               </tr>
             </thead>
@@ -777,12 +846,9 @@ function AdminPage() {
                   <td>{item.normalScore.toLocaleString()}</td>
                   <td>{item.jobBattleScore.toLocaleString()}</td>
                   <td>{item.totalScore.toLocaleString()}</td>
-                  <td>{item.rate}</td>
+                  <td>{Math.round(item.roundSalary).toLocaleString()}원</td>
+                  <td>{Math.round(item.jobBattleSalary).toLocaleString()}원</td>
                   <td>{item.attendanceAdjust.toLocaleString()}원</td>
-                  <td>
-                    {item.totalScore.toLocaleString()} × 63 × {item.rate} -{' '}
-                    {item.attendanceAdjust.toLocaleString()}
-                  </td>
                   <td>{Math.round(item.salary).toLocaleString()}원</td>
                 </tr>
               ))}
@@ -948,9 +1014,7 @@ function AdminForm({ form }) {
         body: JSON.stringify(values),
       });
 
-      if (!response.ok) {
-        throw new Error(`${response.status} ${response.statusText}`);
-      }
+      if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
 
       setStatus({ type: 'success', message: '등록이 완료되었습니다.' });
       setValues(
