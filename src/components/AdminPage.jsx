@@ -357,7 +357,7 @@ function AdminPage() {
     const rate = getWaiterRate(memberName);
     const attendanceAdjust = getWaiterAttendanceAdjust(memberName);
 
-    return totalScore * 63 * rate - attendanceAdjust;
+    return totalScore * 63 * rate + attendanceAdjust;
   };
 
   const scoreSummary = (() => {
