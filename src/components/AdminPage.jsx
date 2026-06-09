@@ -55,6 +55,11 @@ function AdminPage() {
   const [jobBattleRate, setJobBattleRate] = useState('0.55');
   const [totalContributionRate, setTotalContributionRate] = useState('0.7');
 
+  const [waiterRates, setWaiterRates] = useState({
+    문어: '0.55',
+    재명: '0.55',
+  });
+
   const [settingStatus, setSettingStatus] = useState('');
 
   const parseDateString = (value) => {
@@ -126,6 +131,7 @@ function AdminPage() {
       setSpecialRoundShares(data.special_round_shares || {});
       setJobBattleRate(data.job_battle_rate || '0.55');
       setTotalContributionRate(data.total_contribution_rate || '0.7');
+      setWaiterRates(data.waiter_rates || { 문어: '0.55', 재명: '0.55' });
 
       setSettingStatus('불러오기 완료');
     } catch (error) {
@@ -152,6 +158,7 @@ function AdminPage() {
           special_round_shares: specialRoundShares,
           job_battle_rate: jobBattleRate,
           total_contribution_rate: totalContributionRate,
+          waiter_rates: waiterRates,
         }),
       });
 
@@ -328,11 +335,29 @@ function AdminPage() {
     return getWaiterNormalScore(memberName) + getJobBattleMemberScore(memberName);
   };
 
+  const getWaiterRate = (memberName) => {
+    return Number(waiterRates?.[memberName]) || 0;
+  };
+
+  const updateWaiterRate = (memberName, value) => {
+    setWaiterRates((prev) => ({
+      ...prev,
+      [memberName]: value,
+    }));
+  };
+
+  const getWaiterAttendanceAdjust = (memberName) => {
+    return salaryRounds.reduce((sum, round) => {
+      return sum + getPenaltyValue(round, memberName, 'attendance');
+    }, 0);
+  };
+
   const getWaiterSalary = (memberName) => {
     const totalScore = getWaiterTotalScore(memberName);
-    const rate = Number(jobBattleRate) || 0;
+    const rate = getWaiterRate(memberName);
+    const attendanceAdjust = getWaiterAttendanceAdjust(memberName);
 
-    return totalScore * 63 * rate;
+    return totalScore * 63 * rate - attendanceAdjust;
   };
 
   const scoreSummary = (() => {
@@ -416,6 +441,8 @@ function AdminPage() {
     const normalScore = getWaiterNormalScore(member);
     const jobBattleScore = getJobBattleMemberScore(member);
     const totalScore = getWaiterTotalScore(member);
+    const attendanceAdjust = getWaiterAttendanceAdjust(member);
+    const rate = getWaiterRate(member);
     const salary = getWaiterSalary(member);
 
     return {
@@ -423,6 +450,8 @@ function AdminPage() {
       normalScore,
       jobBattleScore,
       totalScore,
+      attendanceAdjust,
+      rate,
       salary,
     };
   });
@@ -534,7 +563,7 @@ function AdminPage() {
             <h2>급여 계산표</h2>
             <p>일반회차: (회차별 총매출 - 문어/재명 점수) × 100 × 0.63 × 기본 지분%</p>
             <p>직급전: 개인 직급전 점수 × 63 × 직급전 배율</p>
-            <p>웨이터: 일반회차 점수 + 직급전 점수 전체 합산 × 63 × 직급전 배율</p>
+            <p>웨이터: 일반회차 점수 + 직급전 점수 전체 합산 × 63 × 개인 배율 - 근태금액</p>
             <p>7회차 총합 기여도: 직급전 제외 전체 점수 × 기여도 배율</p>
           </div>
 
@@ -579,6 +608,23 @@ function AdminPage() {
               onChange={(e) => setJobBattleRate(e.target.value)}
             />
           </label>
+        </div>
+
+        <h3>웨이터 개인별 배율 설정</h3>
+
+        <div className="share-grid">
+          {waiterMembers.map((member) => (
+            <label key={`waiter-rate-${member}`} className="share-box">
+              <strong>{member} 배율</strong>
+              <input
+                type="number"
+                step="0.01"
+                placeholder="예: 0.55"
+                value={waiterRates?.[member] || ''}
+                onChange={(e) => updateWaiterRate(member, e.target.value)}
+              />
+            </label>
+          ))}
         </div>
 
         <h3>7회차 총합 기여도 배율 설정</h3>
@@ -717,6 +763,8 @@ function AdminPage() {
                 <th>일반회차 점수</th>
                 <th>직급전 점수</th>
                 <th>총점수</th>
+                <th>개인 배율</th>
+                <th>근태 차감</th>
                 <th>계산식</th>
                 <th>웨이터 급여</th>
               </tr>
@@ -729,8 +777,11 @@ function AdminPage() {
                   <td>{item.normalScore.toLocaleString()}</td>
                   <td>{item.jobBattleScore.toLocaleString()}</td>
                   <td>{item.totalScore.toLocaleString()}</td>
+                  <td>{item.rate}</td>
+                  <td>{item.attendanceAdjust.toLocaleString()}원</td>
                   <td>
-                    {item.totalScore.toLocaleString()} × 63 × {Number(jobBattleRate) || 0}
+                    {item.totalScore.toLocaleString()} × 63 × {item.rate} -{' '}
+                    {item.attendanceAdjust.toLocaleString()}
                   </td>
                   <td>{Math.round(item.salary).toLocaleString()}원</td>
                 </tr>
@@ -850,7 +901,7 @@ function AdminPage() {
                               onChange={(e) =>
                                 updatePenalty(round, member, 'attendance', e.target.value)
                               }
-                              placeholder="예: -10000"
+                              placeholder="예: 10000"
                             />
                           </td>
 
