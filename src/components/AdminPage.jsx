@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 
 const API_BASE = 'https://asg-b2.onrender.com';
+const SETTING_API = 'https://hm-web-back.onrender.com/salary-settings';
 
 const ADMIN_FORMS = [
   {
@@ -47,6 +48,8 @@ function AdminPage() {
   const [roundRevenues, setRoundRevenues] = useState({});
   const [shares, setShares] = useState({});
   const [penalties, setPenalties] = useState({});
+  const [specialContributions, setSpecialContributions] = useState({});
+  const [specialRoundShares, setSpecialRoundShares] = useState({});
 
   const [settingStatus, setSettingStatus] = useState('');
 
@@ -65,9 +68,7 @@ function AdminPage() {
       setLoadingScores(true);
       const response = await fetch(`${API_BASE}/d`);
 
-      if (!response.ok) {
-        throw new Error(`${response.status} ${response.statusText}`);
-      }
+      if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
 
       const data = await response.json();
       setScoreData(Array.isArray(data) ? data : []);
@@ -83,17 +84,17 @@ function AdminPage() {
     try {
       setSettingStatus('불러오는 중...');
 
-      const response = await fetch(`https://hm-web-back.onrender.com/salary-settings`);
+      const response = await fetch(SETTING_API);
 
-      if (!response.ok) {
-        throw new Error(`${response.status} ${response.statusText}`);
-      }
+      if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
 
       const data = await response.json();
 
       setRoundRevenues(data.round_revenues || {});
       setShares(data.shares || {});
       setPenalties(data.penalties || {});
+      setSpecialContributions(data.special_contributions || {});
+      setSpecialRoundShares(data.special_round_shares || {});
 
       setSettingStatus('불러오기 완료');
     } catch (error) {
@@ -107,7 +108,7 @@ function AdminPage() {
     try {
       setSettingStatus('저장 중...');
 
-      const response = await fetch(`https://hm-web-back.onrender.com/salary-settings`, {
+      const response = await fetch(SETTING_API, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -116,12 +117,12 @@ function AdminPage() {
           round_revenues: roundRevenues,
           shares,
           penalties,
+          special_contributions: specialContributions,
+          special_round_shares: specialRoundShares,
         }),
       });
 
-      if (!response.ok) {
-        throw new Error(`${response.status} ${response.statusText}`);
-      }
+      if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
 
       setSettingStatus('저장 완료');
       alert('급여 설정 저장 완료');
@@ -132,44 +133,54 @@ function AdminPage() {
     }
   };
 
-  const scoreSummary = useMemo(() => {
-    const result = {};
+  const getSpecialContribution = (round, member) => {
+    return Number(specialContributions?.[round]?.[member]) || 0;
+  };
 
-    scoreData.forEach((row) => {
-      const dateText = row[0];
-      const name = row[4];
-      const score = Number(row[7]) || 0;
-      const round = row[8];
+  const updateSpecialContribution = (round, member, value) => {
+    setSpecialContributions((prev) => ({
+      ...prev,
+      [round]: {
+        ...(prev[round] || {}),
+        [member]: value,
+      },
+    }));
+  };
 
-      if (!name) return;
-      if (!round) return;
-      if (round.includes('직급전')) return;
-      if (!score) return;
+  const isSpecialRound = (round) => {
+    return !!specialRoundShares?.[round]?._enabled;
+  };
 
-      const date = parseDateString(dateText);
+  const toggleSpecialRound = (round) => {
+    setSpecialRoundShares((prev) => ({
+      ...prev,
+      [round]: {
+        ...(prev[round] || {}),
+        _enabled: !prev?.[round]?._enabled,
+      },
+    }));
+  };
 
-      if (date) {
-        const hour = date.getHours();
+  const updateSpecialRoundShare = (round, member, value) => {
+    setSpecialRoundShares((prev) => ({
+      ...prev,
+      [round]: {
+        ...(prev[round] || {}),
+        _enabled: true,
+        [member]: value,
+      },
+    }));
+  };
 
-        if (hour >= 2 && hour < 12) return;
-      }
+  const getMemberShare = (round, member) => {
+    if (isSpecialRound(round)) {
+      return Number(specialRoundShares?.[round]?.[member]) || 0;
+    }
 
-      if (!result[name]) {
-        result[name] = {
-          name,
-          total: 0,
-          rounds: {},
-        };
-      }
+    return Number(shares[member]) || 0;
+  };
 
-      result[name].total += score;
-      result[name].rounds[round] = (result[name].rounds[round] || 0) + score;
-    });
-
-    return Object.values(result).sort((a, b) => b.total - a.total);
-  }, [scoreData]);
-
-  const getRoundMemberScore = (roundName, memberName) => {
+  const getBaseRoundMemberScore = (roundName, memberName) => {
     return scoreData.reduce((sum, row) => {
       const name = row[4];
       const round = row[8];
@@ -180,6 +191,10 @@ function AdminPage() {
 
       return sum + score;
     }, 0);
+  };
+
+  const getRoundMemberScore = (roundName, memberName) => {
+    return getBaseRoundMemberScore(roundName, memberName) + getSpecialContribution(roundName, memberName);
   };
 
   const getExcludedRoundScore = (roundName) => {
@@ -231,34 +246,92 @@ function AdminPage() {
     const excludedScore = getExcludedRoundScore(round);
     const adjustedRevenue = Math.max(totalRevenue - excludedScore, 0);
 
-    const sharePercent = Number(shares[member]) || 0;
+    const sharePercent = getMemberShare(round, member);
     const contentAdjust = getPenaltyValue(round, member, 'content');
     const attendanceAdjust = getPenaltyValue(round, member, 'attendance');
 
     return adjustedRevenue * 100 * 0.67 * (sharePercent / 100) + contentAdjust + attendanceAdjust;
   };
 
+  const scoreSummary = useMemo(() => {
+    const result = {};
+
+    scoreData.forEach((row) => {
+      const dateText = row[0];
+      const name = row[4];
+      const score = Number(row[7]) || 0;
+      const round = row[8];
+
+      if (!name) return;
+      if (!round) return;
+      if (round.includes('직급전')) return;
+      if (!score) return;
+
+      const date = parseDateString(dateText);
+
+      if (date) {
+        const hour = date.getHours();
+        if (hour >= 2 && hour < 12) return;
+      }
+
+      if (!result[name]) {
+        result[name] = {
+          name,
+          total: 0,
+          rounds: {},
+        };
+      }
+
+      result[name].total += score;
+      result[name].rounds[round] = (result[name].rounds[round] || 0) + score;
+    });
+
+    salaryRounds.forEach((round) => {
+      salaryMembers.forEach((member) => {
+        const specialScore = getSpecialContribution(round, member);
+
+        if (!specialScore) return;
+
+        if (!result[member]) {
+          result[member] = {
+            name: member,
+            total: 0,
+            rounds: {},
+          };
+        }
+
+        result[member].total += specialScore;
+        result[member].rounds[round] = (result[member].rounds[round] || 0) + specialScore;
+      });
+    });
+
+    return Object.values(result).sort((a, b) => b.total - a.total);
+  }, [scoreData, specialContributions]);
+
   const totalSalarySummary = salaryMembers.map((member) => {
-  let totalScore = 0;
-  let totalContent = 0;
-  let totalAttendance = 0;
-  let totalSalary = 0;
+    let totalScore = 0;
+    let totalContent = 0;
+    let totalAttendance = 0;
+    let totalSpecialContribution = 0;
+    let totalSalary = 0;
 
-  salaryRounds.forEach((round) => {
-    totalScore += getRoundMemberScore(round, member);
-    totalContent += getPenaltyValue(round, member, 'content');
-    totalAttendance += getPenaltyValue(round, member, 'attendance');
-    totalSalary += getSalary(round, member);
+    salaryRounds.forEach((round) => {
+      totalScore += getRoundMemberScore(round, member);
+      totalSpecialContribution += getSpecialContribution(round, member);
+      totalContent += getPenaltyValue(round, member, 'content');
+      totalAttendance += getPenaltyValue(round, member, 'attendance');
+      totalSalary += getSalary(round, member);
+    });
+
+    return {
+      member,
+      totalScore,
+      totalSpecialContribution,
+      totalContent,
+      totalAttendance,
+      totalSalary,
+    };
   });
-
-  return {
-    member,
-    totalScore,
-    totalContent,
-    totalAttendance,
-    totalSalary,
-  };
-});
 
   return (
     <main className="admin-page">
@@ -279,7 +352,7 @@ function AdminPage() {
           <div>
             <p className="section-eyebrow">SALARY</p>
             <h2>개인별 총 점수 콘솔</h2>
-            <p>직급전 제외 / 오전 2시 이후 오전 시간대 점수 제외</p>
+            <p>직급전 제외 / 오전 2시 이후 오전 시간대 점수 제외 / 특별기여도 포함</p>
           </div>
 
           <button type="button" className="admin-submit" onClick={fetchScoreData}>
@@ -297,6 +370,7 @@ function AdminPage() {
                 <th>회차별 점수</th>
               </tr>
             </thead>
+
             <tbody>
               {scoreSummary.map((item, index) => (
                 <tr key={item.name}>
@@ -328,7 +402,10 @@ function AdminPage() {
           <div>
             <h2>급여 계산표</h2>
             <p>
-              계산식: (회차별 총매출 - 문어/재명 점수) × 100 × 0.67 × 지분% + 콘텐츠조정 + 근태조정
+              일반회차: (회차별 총매출 - 문어/재명 점수) × 100 × 0.67 × 기본 지분%
+            </p>
+            <p>
+              특별회차: 해당 회차만 특별 지분% 적용 / 특별기여도는 급여가 아닌 점수에 추가
             </p>
           </div>
 
@@ -344,7 +421,7 @@ function AdminPage() {
 
         {settingStatus ? <p className="admin-status is-success">{settingStatus}</p> : null}
 
-        <h3>지분 설정</h3>
+        <h3>기본 지분 설정</h3>
 
         <div className="share-grid">
           {salaryMembers.map((member) => (
@@ -352,7 +429,7 @@ function AdminPage() {
               <strong>{member}</strong>
               <input
                 type="number"
-                placeholder="지분 %"
+                placeholder="기본 지분 %"
                 value={shares[member] || ''}
                 onChange={(e) => updateShare(member, e.target.value)}
               />
@@ -368,6 +445,7 @@ function AdminPage() {
               <tr>
                 <th>멤버</th>
                 <th>7회차 총점수</th>
+                <th>특별기여도 총합</th>
                 <th>콘텐츠 총합</th>
                 <th>근태 총합</th>
                 <th>7회차 총 급여</th>
@@ -379,6 +457,7 @@ function AdminPage() {
                 <tr key={item.member}>
                   <td>{item.member}</td>
                   <td>{item.totalScore.toLocaleString()}</td>
+                  <td>{item.totalSpecialContribution.toLocaleString()}</td>
                   <td>{item.totalContent.toLocaleString()}</td>
                   <td>{item.totalAttendance.toLocaleString()}</td>
                   <td>{Math.round(item.totalSalary).toLocaleString()}원</td>
@@ -392,11 +471,14 @@ function AdminPage() {
           const excludedScore = getExcludedRoundScore(round);
           const totalRevenue = Number(roundRevenues[round]) || 0;
           const adjustedRevenue = Math.max(totalRevenue - excludedScore, 0);
+          const specialRound = isSpecialRound(round);
 
           return (
             <section key={round} className="round-salary-card">
               <div className="round-salary-head">
-                <h3>{round}</h3>
+                <h3>
+                  {round} {specialRound ? '(특별회차)' : ''}
+                </h3>
 
                 <label>
                   총매출
@@ -407,6 +489,14 @@ function AdminPage() {
                     placeholder="총매출"
                   />
                 </label>
+
+                <button
+                  type="button"
+                  className={specialRound ? 'admin-submit is-blue' : 'admin-submit'}
+                  onClick={() => toggleSpecialRound(round)}
+                >
+                  {specialRound ? '특별회차 ON' : '특별회차 OFF'}
+                </button>
 
                 <p>
                   문어/재명 제외점수: {excludedScore.toLocaleString()} / 계산매출:{' '}
@@ -419,8 +509,10 @@ function AdminPage() {
                   <thead>
                     <tr>
                       <th>멤버</th>
-                      <th>회차 점수</th>
-                      <th>지분%</th>
+                      <th>기본 점수</th>
+                      <th>특별기여도</th>
+                      <th>최종 점수</th>
+                      <th>{specialRound ? '특별 지분%' : '기본 지분%'}</th>
                       <th>콘텐츠 조정</th>
                       <th>근태 조정</th>
                       <th>예상 급여</th>
@@ -429,22 +521,57 @@ function AdminPage() {
 
                   <tbody>
                     {salaryMembers.map((member) => {
-                      const memberScore = getRoundMemberScore(round, member);
+                      const baseScore = getBaseRoundMemberScore(round, member);
+                      const specialContribution = getSpecialContribution(round, member);
+                      const finalScore = getRoundMemberScore(round, member);
                       const salary = getSalary(round, member);
+                      const memberShare = getMemberShare(round, member);
 
                       return (
                         <tr key={`${round}-${member}`}>
                           <td>{member}</td>
-                          <td>{memberScore.toLocaleString()}</td>
-                          <td>{Number(shares[member]) || 0}%</td>
+
+                          <td>{baseScore.toLocaleString()}</td>
+
+                          <td>
+                            <input
+                              type="number"
+                              value={specialContributions?.[round]?.[member] || ''}
+                              onChange={(e) =>
+                                updateSpecialContribution(round, member, e.target.value)
+                              }
+                              placeholder="점수 추가"
+                            />
+                          </td>
+
+                          <td>{finalScore.toLocaleString()}</td>
+
+                          <td>
+                            {specialRound ? (
+                              <input
+                                type="number"
+                                value={specialRoundShares?.[round]?.[member] || ''}
+                                onChange={(e) =>
+                                  updateSpecialRoundShare(round, member, e.target.value)
+                                }
+                                placeholder="특별 지분 %"
+                              />
+                            ) : (
+                              `${memberShare}%`
+                            )}
+                          </td>
+
                           <td>
                             <input
                               type="number"
                               value={penalties?.[round]?.[member]?.content || ''}
-                              onChange={(e) => updatePenalty(round, member, 'content', e.target.value)}
+                              onChange={(e) =>
+                                updatePenalty(round, member, 'content', e.target.value)
+                              }
                               placeholder="예: -10000"
                             />
                           </td>
+
                           <td>
                             <input
                               type="number"
@@ -455,6 +582,7 @@ function AdminPage() {
                               placeholder="예: -10000"
                             />
                           </td>
+
                           <td>{Math.round(salary).toLocaleString()}원</td>
                         </tr>
                       );
@@ -510,6 +638,7 @@ function AdminForm({ form }) {
         }, {})
       );
     } catch (error) {
+      console.error(error);
       setStatus({ type: 'error', message: '등록에 실패했습니다. API 상태를 확인해주세요.' });
     } finally {
       setIsSubmitting(false);
