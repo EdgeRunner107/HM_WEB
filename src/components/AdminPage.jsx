@@ -78,7 +78,7 @@ function AdminPage() {
     if (!date) return false;
 
     const hour = date.getHours();
-    return hour >= 2 && hour < 12;
+    return hour >= 2 && hour < 14;
   };
 
   const shouldExcludeScore = (memberName, dateText) => {
