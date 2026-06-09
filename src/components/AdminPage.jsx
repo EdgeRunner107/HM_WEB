@@ -240,6 +240,48 @@ function AdminPage() {
     return Number(shares[member]) || 0;
   };
 
+  const getRoundMemberBefore2Score = (roundName, memberName) => {
+    return scoreData.reduce((sum, row) => {
+      const dateText = row[0];
+      const name = row[4];
+      const round = row[8];
+      const score = Number(row[7]) || 0;
+
+      if (isJobBattleRound(round)) return sum;
+      if (round !== roundName) return sum;
+      if (name !== memberName) return sum;
+
+      const date = parseDateString(dateText);
+
+      if (!date) return sum;
+
+      const hour = date.getHours();
+
+      if (hour < 2 || hour >= 12) {
+        return sum + score;
+      }
+
+      return sum;
+    }, 0);
+  };
+
+  const getRoundMemberAfter2Score = (roundName, memberName) => {
+    return scoreData.reduce((sum, row) => {
+      const dateText = row[0];
+      const name = row[4];
+      const round = row[8];
+      const score = Number(row[7]) || 0;
+
+      if (isJobBattleRound(round)) return sum;
+      if (round !== roundName) return sum;
+      if (name !== memberName) return sum;
+
+      if (!isExcludedTimeForNormalRound(dateText)) return sum;
+
+      return sum + score;
+    }, 0);
+  };
+
   const getBaseRoundMemberScore = (roundName, memberName) => {
     return scoreData.reduce((sum, row) => {
       const dateText = row[0];
@@ -937,7 +979,8 @@ function AdminPage() {
                   <thead>
                     <tr>
                       <th>멤버</th>
-                      <th>기본 점수</th>
+                      <th>2시 이전/반영 점수</th>
+                      <th>2시 이후 생략 점수</th>
                       <th>특별기여도</th>
                       <th>최종 점수</th>
                       <th>{specialRound ? '특별 지분%' : '기본 지분%'}</th>
@@ -949,7 +992,8 @@ function AdminPage() {
 
                   <tbody>
                     {salaryMembers.map((member) => {
-                      const baseScore = getBaseRoundMemberScore(round, member);
+                      const before2Score = getRoundMemberBefore2Score(round, member);
+                      const after2Score = getRoundMemberAfter2Score(round, member);
                       const finalScore = getRoundMemberScore(round, member);
                       const salary = getSalary(round, member);
                       const memberShare = getMemberShare(round, member);
@@ -958,7 +1002,9 @@ function AdminPage() {
                         <tr key={`${round}-${member}`}>
                           <td>{member}</td>
 
-                          <td>{baseScore.toLocaleString()}</td>
+                          <td>{before2Score.toLocaleString()}</td>
+
+                          <td>{after2Score.toLocaleString()}</td>
 
                           <td>
                             <input
