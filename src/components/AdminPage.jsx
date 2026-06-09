@@ -43,12 +43,8 @@ const salaryRounds = Array.from({ length: 7 }, (_, i) => `엑셀부${i + 1}회�
 const excludedSalaryMembers = ['문어', '재명', '이재명'];
 
 const DEFAULT_WAITER_RATES = {
-  문어: {
-    jobBattle: '0.55',
-  },
-  재명: {
-    jobBattle: '0.55',
-  },
+  문어: { jobBattle: '0.55' },
+  재명: { jobBattle: '0.55' },
 };
 
 function AdminPage() {
@@ -94,30 +90,13 @@ function AdminPage() {
     return typeof round === 'string' && round.includes('직급전');
   };
 
-  const fetchScoreData = async () => {
-    try {
-      setLoadingScores(true);
-
-      const response = await fetch(`${API_BASE}/d`);
-
-      if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
-
-      const data = await response.json();
-      setScoreData(Array.isArray(data) ? data : []);
-    } catch (error) {
-      alert('점수 데이터 조회 실패');
-      console.error(error);
-    } finally {
-      setLoadingScores(false);
-    }
-  };
-
   const normalizeWaiterRates = (data) => {
     const next = data || DEFAULT_WAITER_RATES;
 
     return waiterMembers.reduce((acc, member) => {
       if (typeof next?.[member] === 'string' || typeof next?.[member] === 'number') {
         acc[member] = {
+          ...DEFAULT_WAITER_RATES[member],
           jobBattle: String(next[member]),
         };
       } else {
@@ -131,13 +110,35 @@ function AdminPage() {
     }, {});
   };
 
+  const fetchScoreData = async () => {
+    try {
+      setLoadingScores(true);
+
+      const response = await fetch(`${API_BASE}/d`);
+
+      if (!response.ok) {
+        throw new Error(`${response.status} ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      setScoreData(Array.isArray(data) ? data : []);
+    } catch (error) {
+      alert('점수 데이터 조회 실패');
+      console.error(error);
+    } finally {
+      setLoadingScores(false);
+    }
+  };
+
   const loadSalarySettings = async () => {
     try {
       setSettingStatus('불러오는 중...');
 
       const response = await fetch(SETTING_API);
 
-      if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+      if (!response.ok) {
+        throw new Error(`${response.status} ${response.statusText}`);
+      }
 
       const data = await response.json();
 
@@ -179,7 +180,9 @@ function AdminPage() {
         }),
       });
 
-      if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+      if (!response.ok) {
+        throw new Error(`${response.status} ${response.statusText}`);
+      }
 
       setSettingStatus('저장 완료');
       alert('급여 설정 저장 완료');
@@ -395,7 +398,7 @@ function AdminPage() {
     const jobBattleSalary = getWaiterJobBattleSalary(memberName);
     const attendanceAdjust = getWaiterAttendanceAdjust(memberName);
 
-    return roundSalary + jobBattleSalary + attendanceAdjust;
+    return roundSalary + jobBattleSalary - attendanceAdjust;
   };
 
   const scoreSummary = (() => {
@@ -603,7 +606,9 @@ function AdminPage() {
             <h2>급여 계산표</h2>
             <p>일반회차: (회차별 총매출 - 문어/재명 점수) × 100 × 0.63 × 기본 지분%</p>
             <p>직급전: 개인 직급전 점수 × 63 × 직급전 배율</p>
-            <p>웨이터: 회차별 점수 × 63 × 회차별 배율 + 직급전 점수 × 63 × 직급전 배율 - 근태금액</p>
+            <p>
+              웨이터: 회차별 점수 × 63 × 회차별 배율 + 직급전 점수 × 63 × 직급전 배율 - 근태금액
+            </p>
             <p>7회차 총합 기여도: 직급전 제외 전체 점수 × 기여도 배율</p>
           </div>
 
@@ -621,18 +626,31 @@ function AdminPage() {
 
         <h3>기본 지분 설정</h3>
 
-        <div className="share-grid">
-          {salaryMembers.map((member) => (
-            <label key={member} className="share-box">
-              <strong>{member}</strong>
-              <input
-                type="number"
-                placeholder="기본 지분 %"
-                value={shares[member] || ''}
-                onChange={(e) => updateShare(member, e.target.value)}
-              />
-            </label>
-          ))}
+        <div className="salary-table-wrap">
+          <table className="salary-table">
+            <thead>
+              <tr>
+                <th>멤버</th>
+                <th>기본 지분%</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {salaryMembers.map((member) => (
+                <tr key={`share-${member}`}>
+                  <td>{member}</td>
+                  <td>
+                    <input
+                      type="number"
+                      placeholder="기본 지분 %"
+                      value={shares[member] || ''}
+                      onChange={(e) => updateShare(member, e.target.value)}
+                    />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
 
         <h3>직급전 기본 배율 설정</h3>
@@ -1014,7 +1032,9 @@ function AdminForm({ form }) {
         body: JSON.stringify(values),
       });
 
-      if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+      if (!response.ok) {
+        throw new Error(`${response.status} ${response.statusText}`);
+      }
 
       setStatus({ type: 'success', message: '등록이 완료되었습니다.' });
       setValues(
