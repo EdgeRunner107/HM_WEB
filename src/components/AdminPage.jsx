@@ -75,6 +75,14 @@ function AdminPage() {
     return hour >= 2 && hour < 12;
   };
 
+  const shouldExcludeScore = (memberName, dateText) => {
+    if (waiterMembers.includes(memberName)) {
+      return false;
+    }
+
+    return isExcludedTimeForNormalRound(dateText);
+  };
+
   const isJobBattleRound = (round) => {
     return typeof round === 'string' && round.includes('직급전');
   };
@@ -217,7 +225,7 @@ function AdminPage() {
       if (isJobBattleRound(round)) return sum;
       if (round !== roundName) return sum;
       if (name !== memberName) return sum;
-      if (isExcludedTimeForNormalRound(dateText)) return sum;
+      if (shouldExcludeScore(name, dateText)) return sum;
 
       return sum + score;
     }, 0);
@@ -237,7 +245,7 @@ function AdminPage() {
       if (isJobBattleRound(round)) return sum;
       if (round !== roundName) return sum;
       if (!excludedSalaryMembers.includes(name)) return sum;
-      if (isExcludedTimeForNormalRound(dateText)) return sum;
+      if (shouldExcludeScore(name, dateText)) return sum;
 
       return sum + score;
     }, 0);
@@ -340,7 +348,7 @@ function AdminPage() {
       if (!round) return;
       if (!score) return;
       if (isJobBattleRound(round)) return;
-      if (isExcludedTimeForNormalRound(dateText)) return;
+      if (shouldExcludeScore(name, dateText)) return;
 
       if (!result[name]) {
         result[name] = {
@@ -475,7 +483,7 @@ function AdminPage() {
           <div>
             <p className="section-eyebrow">SALARY</p>
             <h2>개인별 총 점수 콘솔</h2>
-            <p>직급전 제외 / 오전 2시 이후 오전 시간대 점수 제외 / 특별기여도 포함</p>
+            <p>직급전 제외 / 일반 멤버 오전 2시 이후 제외 / 문어·재명은 새벽 점수 포함</p>
           </div>
 
           <button type="button" className="admin-submit" onClick={fetchScoreData}>
@@ -524,9 +532,7 @@ function AdminPage() {
         <div className="salary-console-head">
           <div>
             <h2>급여 계산표</h2>
-            <p>
-              일반회차: (회차별 총매출 - 문어/재명 점수) × 100 × 0.67 × 기본 지분%
-            </p>
+            <p>일반회차: (회차별 총매출 - 문어/재명 점수) × 100 × 0.63 × 기본 지분%</p>
             <p>직급전: 개인 직급전 점수 × 63 × 직급전 배율</p>
             <p>웨이터: 일반회차 점수 + 직급전 점수 전체 합산 × 63 × 직급전 배율</p>
             <p>7회차 총합 기여도: 직급전 제외 전체 점수 × 기여도 배율</p>
