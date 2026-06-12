@@ -114,7 +114,7 @@ function AdminPage() {
     try {
       setLoadingScores(true);
 
-      const response = await fetch(`${API_BASE}/d`);
+      const response = await fetch(`${API_BASE}/b`);
 
       if (!response.ok) {
         throw new Error(`${response.status} ${response.statusText}`);
